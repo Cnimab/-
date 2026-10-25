@@ -2,9 +2,26 @@ name: 🚀 续一次火
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'diagnose 不发送；test-one 仅原名单首位好友一条（先完成诊断和发送校验适配）'
+        type: choice
+        required: true
+        default: diagnose
+        options:
+          - diagnose
+          - test-one
   schedule:
     - cron: "0 0 * * *"
       timezone: "Asia/Shanghai"
+
+permissions:
+  contents: read
+
+# One shared lock for manual tests and scheduled sends. Never cancel mid-send.
+concurrency:
+  group: douyin-messaging
+  cancel-in-progress: false
 
 jobs:
   run:
@@ -12,8 +29,18 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.61.0-jammy
     timeout-minutes: 15
+    env:
+      RUN_MODE: ${{ github.event_name == 'schedule' && 'send-all' || inputs.mode || 'diagnose' }}
+      MAIL_CONFIGURED: ${{ secrets.MAIL_ADDRESS != '' && secrets.MAIL_USERNAME != '' && secrets.MAIL_PASSWORD != '' }}
 
     steps:
+      - name: 拒绝自动重试发送 (Prevent duplicate sends on rerun)
+        run: |
+          if [ "$GITHUB_RUN_ATTEMPT" != "1" ] && [ "$RUN_MODE" != "diagnose" ]; then
+            echo 'SEND_RERUN_BLOCKED_CHECK_CHAT_FIRST'
+            exit 1
+          fi
+
       - name: 克隆当前仓库 (Clone current repo)
         uses: actions/checkout@v6
 
@@ -28,14 +55,19 @@ jobs:
       - name: 安装运行时依赖 (Install dependencies)
         run: bun install --production
 
-      - name: 续一次火 (Run spark job)
+      - name: 诊断或续火 (Diagnose or send)
         env:
           DOUYIN_COOKIE: ${{ secrets.DOUYIN_COOKIE }}
           DOUYIN_TARGET_NAMES: ${{ secrets.DOUYIN_TARGET_NAMES }}
+          # Maintainer-only DOM adapters, verified on the current authenticated UI.
+          # Unset => sending is refused before typing. Never guess these selectors.
+          DOUYIN_CHAT_HEADER_SELECTOR: ${{ vars.DOUYIN_CHAT_HEADER_SELECTOR }}
+          DOUYIN_OUTGOING_MESSAGE_SELECTOR: ${{ vars.DOUYIN_OUTGOING_MESSAGE_SELECTOR }}
         run: bun src/main.ts
 
-      - name: 发送失败邮件 (Send failure email)
-        if: ${{ failure() }}
+      - name: 发送失败邮件 (Send optional failure email)
+        if: ${{ failure() && github.event_name == 'schedule' && env.MAIL_CONFIGURED == 'true' }}
+        continue-on-error: true
         uses: dawidd6/action-send-mail@v18
         with:
           server_address: smtp.qq.com
@@ -47,9 +79,6 @@ jobs:
           to: ${{ secrets.MAIL_ADDRESS }}
           from: ${{ secrets.MAIL_ADDRESS }}
           body: |
-            抖音续火任务执行失败
+            抖音续火任务执行失败。若提示发送结果不确定，请先检查聊天记录，不要直接重跑。
             仓库：${{ github.repository }}
             运行链接：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-#      - name: Setup tmate session
-#        uses: mxschmitt/action-tmate@v3

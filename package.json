@@ -12,7 +12,8 @@
     "format:check": "oxfmt --check .",
     "lint": "oxlint -c .oxlintrc.jsonc .",
     "lint:fix": "oxlint -c .oxlintrc.jsonc --fix .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
