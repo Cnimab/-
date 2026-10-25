@@ -15,6 +15,25 @@
 </div>
 <br>
 
+## 🛑 恢复前的安全诊断（当前为待实机验证的修复）
+
+**这份改动不是“已恢复发送”的证明。暂时不要启用旧版工作流或直接重跑旧任务。**
+修复默认只诊断，不发消息；原好友 Secret、随机一言文件和原定时表达式保持不变。
+
+1. 先审阅并合入安全修复，再由仓库所有者处理工作流启用。只推送修复分支不会替换 `main`。
+2. 在 `🚀 续一次火` 的 `Run workflow` 中选择 `diagnose`（默认）。它只检查原名单首位好友是否有唯一搜索结果、聊天框是否可用；不输入或发送消息。
+3. 诊断日志只输出固定状态码。若出现 `LOGIN_REQUIRED_REFRESH_COOKIE_PRIVATELY`，请在自己设备登录抖音后，**自行在仓库 Secrets 更新 Cookie**；不要贴到聊天、Issue 或日志里。若出现 `ACCESS_CHALLENGE_STOP_MANUAL_REVIEW`，停止自动化，手动检查；不绕过验证码或风控。
+4. `CHAT_SEARCH_UNAVAILABLE` 仅说明聊天搜索不可用，不能据此断言 Cookie 已过期。需要在已登录界面检查是否为页面改版、登录失败或服务异常。
+5. **尚缺实机校验：**维护者必须在当前已登录聊天页核对会话标题和“自己发出的消息正文”定位规则。当前环境没有该界面，不能猜测规则。`DOUYIN_CHAT_HEADER_SELECTOR` 与 `DOUYIN_OUTGOING_MESSAGE_SELECTOR` 未配置时，所有发送模式都会在输入前停止。这是维护者适配项，**不要求普通用户自己编写 CSS**。
+6. 适配完成且诊断通过后，才选择 `test-one`：只给原名单第一位好友发送一条原一言；在全新浏览器上下文重新打开同一聊天并确认该条发出记录存在，才报告 `PERSISTED_OUTGOING_RECORD_VERIFIED_RECIPIENT_1`。这证明聊天记录持久化，不代表对方已读或火花一定增加。
+7. 若出现 `SEND_OUTCOME_UNCERTAIN_STOP_CHECK_CHAT_DO_NOT_RETRY`，可能已经发出，先手动查聊天，**不要重跑**；本次会停止后续好友发送。工作流也拒绝直接重跑发送任务，避免重复消息。
+
+当前没有完成真实登录诊断和单条试发，因此定时恢复仍待确认。`diagnose` 成功只代表检查通过，不代表发送成功。诊断不上传截图、页面正文、网络记录或 Cookie；CI 测试使用拦截所有请求的虚拟聊天页，不使用任何仓库 Secret。
+
+维护者本地验证：`pnpm typecheck && pnpm lint && pnpm format:check && pnpm test`。
+测试需要 Playwright Chromium；可用 `TEST_BROWSER_PATH` 指向本机 Chromium。
+本地 `pnpm dev` 也默认 `RUN_MODE=diagnose`。恢复后的定时任务使用原时间和名单；可选邮件的三项 Secret 不齐全时自动跳过邮件步骤。
+
 ## ✨ 项目简介
 
 本项目是一个基于 **Playwright + TypeScript** 的抖音聊天自动化脚本。它会携带你配置的抖音 Cookie 打开聊天页，按配置的会话名称依次定位聊天对象，并从 `assets/yiyan.json` 中随机挑选一句 `hitokoto` 发送出去。
@@ -111,7 +130,7 @@ Settings -> Secrets and variables -> Actions -> New repository secret
 Actions -> 点击绿色的 I understand my workflows, go ahead and enable them -> 🚀 续一次火 -> Enable workflow -> Run workflow
 ```
 
-点击 `Run workflow` 后等待任务完成。手机打开抖音，你就可以发现你发了一条嘉豪语录给朋友了
+修复版首次运行请使用默认 `diagnose`，它不会发送消息。试发及恢复步骤见本文顶部安全诊断说明。
 
 ![run-workflow](assets/readme/run-workflow.jpg)
 
@@ -161,7 +180,7 @@ DOUYIN_COOKIE='[{"domain":".douyin.com","expirationDate":1800175766.87008,"hostO
 pnpm dev
 ```
 
-脚本会打开 `https://www.douyin.com/chat`，等待页面加载，定位配置中的会话名称，发送随机一言，并在发送后等待约 5 秒再退出。
+脚本默认打开聊天页并检查原名单首位好友，不发送消息。发送仅在完成顶部所述实机适配后，通过明确的 `RUN_MODE=test-one` 或定时模式进行。
 
 ## 🔨 开发命令
 
@@ -220,3 +239,4 @@ douyin-auto-spark/
 ## 📄 许可证
 
 本项目采用 [GPL v3.0](LICENSE) 开源许可证。
+
