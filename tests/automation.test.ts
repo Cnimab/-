@@ -77,7 +77,10 @@ function fixture(
           add(text); editor.textContent = '';
         });
         </script>`
-      await route.fulfill({ contentType: 'text/html', body: html })
+      await route.fulfill({
+        contentType: 'text/html; charset=utf-8',
+        body: '<meta charset="utf-8">' + html,
+      })
     })
     return context
   }
@@ -122,7 +125,13 @@ for (const scenario of ['login', 'challenge', 'missing'] as const) {
     const f = fixture({ page: scenario })
     await assert.rejects(
       runSpark(f.createContext, f.config, [], f.report),
-      /LOGIN_REQUIRED|ACCESS_CHALLENGE|CHAT_SEARCH_UNAVAILABLE/,
+      new RegExp(
+        {
+          login: 'LOGIN_REQUIRED',
+          challenge: 'ACCESS_CHALLENGE',
+          missing: 'CHAT_SEARCH_UNAVAILABLE',
+        }[scenario],
+      ),
     )
     assert.equal(f.sends.length, 0)
   })
